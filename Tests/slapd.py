@@ -5,6 +5,7 @@ and talking to it with ldapsearch/ldapadd.
 """
 
 import sys, os, socket, time, subprocess, logging
+import six
 
 _log = logging.getLogger("slapd")
 
@@ -154,7 +155,8 @@ class Slapd:
             self._log.debug("deleting existing %s", path)
             os.remove(path)
         self._log.debug("writing config to %s", path)
-        file(path, "w").writelines([line + "\n" for line in self._config])
+        with open(path, "w") as f:
+            f.writelines([line + "\n" for line in self._config])
         return path
 
     def start(self):
@@ -208,7 +210,7 @@ class Slapd:
 
     def stop(self):
         """Stops the slapd server, and waits for it to terminate"""
-        if self._proc is not None:
+        if self._proc.poll() is not None:
             self._log.debug("stopping slapd")
             if hasattr(self._proc, 'terminate'):
                 self._proc.terminate()
@@ -271,7 +273,7 @@ class Slapd:
                 "-w", self.get_root_password(),
                 "-H", self.get_url()] + extra_args,
                 stdin = subprocess.PIPE, stdout=subprocess.PIPE)
-        p.communicate(ldif)
+        p.communicate(six.b(ldif))
         if p.wait() != 0:
             raise RuntimeError("ldapadd process failed")
 
@@ -374,10 +376,10 @@ if __name__ == '__main__' and sys.argv == ['run']:
     slapd.start()
     print("Contents of LDAP server follow:\n")
     for dn,attrs in slapd.ldapsearch():
-        print("dn: " + dn)
+        print(("dn: " + dn))
         for name,val in attrs:
-            print(name + ": " + val)
+            print((name + ": " + val))
         print("")
-    print(slapd.get_url())
+    print((slapd.get_url()))
     slapd.wait()
 

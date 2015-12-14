@@ -33,6 +33,7 @@ if __debug__:
   import traceback
 
 import sys,time,pprint,_ldap,ldap,ldap.sasl,ldap.functions
+import six
 
 from ldap.schema import SCHEMA_ATTRS
 from ldap.controls import LDAPControl,DecodeControlTuples,RequestControlTuples
@@ -109,7 +110,7 @@ class SimpleLDAPObject:
             diagnostic_message_success = self._l.get_option(ldap.OPT_DIAGNOSTIC_MESSAGE)
       finally:
         self._ldap_object_lock.release()
-    except LDAPError,e:
+    except LDAPError as e:
       if __debug__ and self._trace_level>=2:
         self._trace_file.write('=> LDAPError - %s: %s\n' % (e.__class__.__name__,str(e)))
       raise
@@ -121,20 +122,20 @@ class SimpleLDAPObject:
     return result
 
   def __setattr__(self,name,value):
-    if self.CLASSATTR_OPTION_MAPPING.has_key(name):
+    if name in self.CLASSATTR_OPTION_MAPPING:
       self.set_option(self.CLASSATTR_OPTION_MAPPING[name],value)
     else:
       self.__dict__[name] = value
 
   def __getattr__(self,name):
-    if self.CLASSATTR_OPTION_MAPPING.has_key(name):
+    if name in self.CLASSATTR_OPTION_MAPPING:
       return self.get_option(self.CLASSATTR_OPTION_MAPPING[name])
-    elif self.__dict__.has_key(name):
+    elif name in self.__dict__:
       return self.__dict__[name]
     else:
-      raise AttributeError,'%s has no attribute %s' % (
+      raise AttributeError('%s has no attribute %s' % (
         self.__class__.__name__,repr(name)
-      )
+      ))
 
   def fileno(self):
     """
@@ -814,13 +815,16 @@ class ReconnectLDAPObject(SimpleLDAPObject):
     self._retry_max = retry_max
     self._retry_delay = retry_delay
     self._start_tls = 0
-    self._reconnects_done = 0L
+    if six.PY2:
+      self._reconnects_done = long(0)
+    else:
+      self._reconnects_done = 0
 
   def __getstate__(self):
     """return data representation for pickled object"""
     d = {}
-    for k,v in self.__dict__.items():
-      if not self.__transient_attrs__.has_key(k):
+    for k,v in list(self.__dict__.items()):
+      if k not in self.__transient_attrs__:
         d[k] = v
     return d
 
@@ -869,7 +873,7 @@ class ReconnectLDAPObject(SimpleLDAPObject):
             SimpleLDAPObject.start_tls_s(self)
           # Repeat last simple or SASL bind
           self._apply_last_bind()
-        except (ldap.SERVER_DOWN,ldap.TIMEOUT),e:
+        except (ldap.SERVER_DOWN,ldap.TIMEOUT) as e:
           if __debug__ and self._trace_level>=1:
             self._trace_file.write('*** %s reconnect to %s failed\n' % (
               counter_text,uri
@@ -887,14 +891,17 @@ class ReconnectLDAPObject(SimpleLDAPObject):
             self._trace_file.write('*** %s reconnect to %s successful => repeat last operation\n' % (
               counter_text,uri
             ))
-          self._reconnects_done = self._reconnects_done + 1L
+          if six.PY2:
+            self._reconnects_done = self._reconnects_done + long(1)
+          else:
+            self._reconnects_done = self._reconnects_done + 1
           break
     finally:
       self._reconnect_lock.release()
     return # reconnect()
 
   def _apply_method_s(self,func,*args,**kwargs):
-    if not self.__dict__.has_key('_l'):
+    if '_l' not in self.__dict__:
       self.reconnect(self._uri,retry_max=self._retry_max,retry_delay=self._retry_delay)
     try:
       return func(self,*args,**kwargs)

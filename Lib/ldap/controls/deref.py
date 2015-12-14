@@ -90,7 +90,7 @@ class DereferenceControl(LDAPControl):
   def _derefSpecs(self):
     deref_specs = DerefSpecs()
     i = 0
-    for deref_attr,deref_attribute_names in self.derefSpecs.items():
+    for deref_attr,deref_attribute_names in list(self.derefSpecs.items()):
       deref_spec = DerefSpec()
       deref_attributes = AttributeList()
       for j in range(len(deref_attribute_names)):
@@ -110,7 +110,7 @@ class DereferenceControl(LDAPControl):
     for deref_res in decodedValue:
       deref_attr,deref_val,deref_vals = deref_res
       partial_attrs_dict = dict([
-        (str(t),map(str,v))
+        (str(t),list(map(str,v)))
         for t,v in deref_vals or []
       ])
       try:

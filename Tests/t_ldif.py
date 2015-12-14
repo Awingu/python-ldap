@@ -6,10 +6,7 @@ import textwrap
 import ldif
 
 
-try:
-    from StringIO import StringIO
-except ImportError:
-    from io import StringIO
+from six import StringIO
 
 
 class TestParse(unittest.TestCase):

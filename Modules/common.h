@@ -28,6 +28,23 @@ typedef int Py_ssize_t;
 #define PY_SSIZE_T_MIN INT_MIN
 #endif
 
+#if PY_MAJOR_VERSION >= 3
+#define IS_PY3K
+
+/* Provide Python3 int equivalents for PyInt* functions */
+#define PyInt_FromLong(v) PyLong_FromLong(v)
+
+/* Provide Python3 string equivalents for PyString* functions */
+#define PyString_Check(s) (PyUnicode_Check(s) || PyBytes_Check(s))
+inline char* __Py3CompatString_AsString(PyObject *string);
+#define PyString_AsString(s) __Py3CompatString_AsString(s)
+inline Py_ssize_t __Py3CompatString_Size(PyObject *string);
+#define PyString_Size(s) __Py3CompatString_Size(s)
+inline PyObject* __Py3CompatString_FromStringAndSize(const char *v, Py_ssize_t len);
+#define PyString_FromStringAndSize(s, len) __Py3CompatString_FromStringAndSize(s, len)
+#define PyString_FromString(s) PyString_FromStringAndSize(s, strlen(s))
+#endif /* PY_MAJOR_VERSION */
+
 #include <string.h>
 #define streq( a, b ) \
 	( (*(a)==*(b)) && 0==strcmp(a,b) )

@@ -13,8 +13,10 @@ try:
 except ImportError:
         from distutils.core import setup, Extension
 
-from ConfigParser import ConfigParser
-import sys,os,string,time
+import six
+from six.moves.configparser import ConfigParser
+import sys,os,time
+from functools import reduce
 
 ##################################################################
 # Weird Hack to grab release version of python-ldap from local dir
@@ -24,9 +26,9 @@ package_init_file_name = reduce(os.path.join,[exec_startdir,'Lib','ldap','__init
 f = open(package_init_file_name,'r')
 s = f.readline()
 while s:
-  s = string.strip(s)
+  s = s.strip()
   if s[0:11]=='__version__':
-    version = eval(string.split(s,'=')[1])
+    version = eval(s.split('=')[1])
     break
   s = f.readline()
 f.close()
@@ -50,15 +52,15 @@ cfg.read('setup.cfg')
 if cfg.has_section('_ldap'):
   for name in dir(LDAP_CLASS):
     if cfg.has_option('_ldap', name):
-      print name + ': ' + cfg.get('_ldap', name)
-      setattr(LDAP_CLASS, name, string.split(cfg.get('_ldap', name)))
+      print(name + ': ' + cfg.get('_ldap', name))
+      setattr(LDAP_CLASS, name, cfg.get('_ldap', name).split())
 
 for i in range(len(LDAP_CLASS.defines)):
   LDAP_CLASS.defines[i]=((LDAP_CLASS.defines[i],None))
 
 for i in range(len(LDAP_CLASS.extra_files)):
-  destdir, origfiles = string.split(LDAP_CLASS.extra_files[i], ':')
-  origfileslist = string.split(origfiles, ',')
+  destdir, origfiles = LDAP_CLASS.extra_files[i].split(':')
+  origfileslist = origfiles.split(',')
   LDAP_CLASS.extra_files[i]=(destdir, origfileslist)
 
 #-- Let distutils/setuptools do the rest
@@ -73,7 +75,7 @@ kwargs = dict()
 if has_setuptools:
   kwargs = dict(
     include_package_data = True,
-    install_requires = ['setuptools'],
+    install_requires = ['setuptools', 'six'],
     zip_safe = False
   )
 

@@ -73,7 +73,7 @@ def extract_tokens(l,known_tokens):
           start = i
           while i<l_len and l[i]!=")":
             i += 1
-          result[token] = tuple(filter(lambda v:v!='$',l[start:i]))
+          result[token] = tuple([v for v in l[start:i] if v!='$'])
           i += 1 # Consume right parentheses
         else:
           # single-valued

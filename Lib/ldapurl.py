@@ -23,9 +23,8 @@ __all__ = [
   'LDAPUrlExtension','LDAPUrlExtensions','LDAPUrl'
 ]
 
-import UserDict
-
-from urllib import quote,unquote
+from six.moves import UserDict
+from six.moves.urllib.parse import quote, unquote
 
 LDAP_SCOPE_BASE = 0
 LDAP_SCOPE_ONELEVEL = 1
@@ -134,15 +133,15 @@ class LDAPUrlExtension:
     return not self.__eq__(other)
 
 
-class LDAPUrlExtensions(UserDict.UserDict):
+class LDAPUrlExtensions(UserDict):
   """
   Models a collection of LDAP URL extensions as
   dictionary type
   """
 
   def __init__(self,default=None):
-    UserDict.UserDict.__init__(self)
-    for k,v in (default or {}).items():
+    UserDict.__init__(self)
+    for k,v in list((default or {}).items()):
       self[k]=v
 
   def __setitem__(self,name,value):
@@ -158,11 +157,11 @@ class LDAPUrlExtensions(UserDict.UserDict):
   def values(self):
     return [
       self[k]
-      for k in self.keys()
+      for k in list(self.keys())
     ]
 
   def __str__(self):
-    return ','.join(map(str,self.values()))
+    return ','.join(map(str,list(self.values())))
 
   def __repr__(self):
     return '<%s.%s instance at %s: %s>' % (
@@ -185,7 +184,7 @@ class LDAPUrlExtensions(UserDict.UserDict):
         self[e.extype] = e
 
   def unparse(self):
-    return ','.join([ v.unparse() for v in self.values() ])
+    return ','.join([ v.unparse() for v in list(self.values()) ])
 
 
 class LDAPUrl:
@@ -317,7 +316,7 @@ class LDAPUrl:
         Dictionary containing a mapping from class attributes
         to default values
     """
-    for k in defaults.keys():
+    for k in list(defaults.keys()):
       if getattr(self,k) is None:
         setattr(self,k,defaults[k])
 
@@ -395,10 +394,10 @@ class LDAPUrl:
     )
 
   def __getattr__(self,name):
-    if self.attr2extype.has_key(name):
+    if name in self.attr2extype:
       extype = self.attr2extype[name]
       if self.extensions and \
-         self.extensions.has_key(extype) and \
+         extype in self.extensions and \
          not self.extensions[extype].exvalue is None:
         result = unquote(self.extensions[extype].exvalue)
       else:
@@ -410,7 +409,7 @@ class LDAPUrl:
     return result # __getattr__()
 
   def __setattr__(self,name,value):
-    if self.attr2extype.has_key(name):
+    if name in self.attr2extype:
       extype = self.attr2extype[name]
       if value is None:
         # A value of None means that extension is deleted
@@ -424,7 +423,7 @@ class LDAPUrl:
       self.__dict__[name] = value
 
   def __delattr__(self,name):
-    if self.attr2extype.has_key(name):
+    if name in self.attr2extype:
       extype = self.attr2extype[name]
       if self.extensions:
         try:

@@ -6,16 +6,11 @@ See http://www.python-ldap.org/ for details.
 \$Id: models.py,v 1.48 2015/06/06 09:21:38 stroeder Exp $
 """
 
-import UserDict,ldap.cidict
+import ldap.cidict
+from six.moves import UserDict
+import six
 
 from ldap.schema.tokenizer import split_tokens,extract_tokens
-
-if __debug__:
-  from types import TupleType,StringType,IntType
-  try:
-    from types import BooleanType
-  except ImportError:
-    BooleanType = IntType
 
 
 NOT_HUMAN_READABLE_LDAP_SYNTAXES = {
@@ -29,6 +24,21 @@ NOT_HUMAN_READABLE_LDAP_SYNTAXES = {
   '1.3.6.1.4.1.1466.115.121.1.40':None, # Octet String
   '1.3.6.1.4.1.1466.115.121.1.49':None, # Supported Algorithm
 }
+
+def _check_if_iterable(obj):
+    return hasattr(obj, '__iter__')
+
+def _check_if_string(obj, can_be_none=True):
+    is_string_type = isinstance(obj, six.string_types) or isinstance(obj, six.binary_type)
+    if not can_be_none:
+        return is_string_type
+    return obj is None or is_string_type
+
+def _check_if_integer(obj):
+    return isinstance(obj, six.integer_types)
+
+def _check_if_boolean(obj):
+    return _check_if_integer(obj) and (obj == 0 or obj == 1)
 
 
 class SchemaElement:
@@ -70,7 +80,7 @@ class SchemaElement:
     return self.oid
 
   def key_attr(self,key,value,quoted=0):
-    assert value is None or type(value)==StringType,TypeError("value has to be of StringType, was %s" % repr(value))
+    assert _check_if_string(value),TypeError("value has to be of StringType, was %s" % repr(value))
     if value:
       if quoted:
         return " %s '%s'" % (key,value.replace("'","\\'"))
@@ -80,7 +90,7 @@ class SchemaElement:
       return ""
 
   def key_list(self,key,values,sep=' ',quoted=0):
-    assert type(values)==TupleType,TypeError("values has to be of ListType")
+    assert _check_if_iterable(values),TypeError("values has to be of ListType")
     if not values:
       return ''
     if quoted:
@@ -161,13 +171,13 @@ class ObjectClass(SchemaElement):
       self.sup = ('top',)
     else:
       self.sup = d['SUP']
-    assert type(self.names)==TupleType
-    assert self.desc is None or type(self.desc)==StringType
-    assert type(self.obsolete)==BooleanType and (self.obsolete==0 or self.obsolete==1)
-    assert type(self.sup)==TupleType
-    assert type(self.kind)==IntType
-    assert type(self.must)==TupleType
-    assert type(self.may)==TupleType
+    assert _check_if_iterable(self.names)
+    assert _check_if_string(self.desc)
+    assert _check_if_boolean(self.obsolete)
+    assert _check_if_iterable(self.sup)
+    assert _check_if_integer(self.kind)
+    assert _check_if_iterable(self.must)
+    assert _check_if_iterable(self.may)
     return
 
   def __str__(self):
@@ -281,21 +291,27 @@ class AttributeType(SchemaElement):
           self.syntax_len = None
           for i in l:
             if i.startswith("{") and i.endswith("}"):
-              self.syntax_len=long(i[1:-1])
+              if six.PY2:
+                self.syntax_len=long(i[1:-1])
+              else:
+                self.syntax_len=int(i[1:-1])
         else:
-          self.syntax_len = long(syntax_len[:-1])
+          if six.PY2:
+            self.syntax_len = long(syntax_len[:-1])
+          else:
+            self.syntax_len = int(syntax_len[:-1])
     self.single_value = d['SINGLE-VALUE']!=None
     self.collective = d['COLLECTIVE']!=None
     self.no_user_mod = d['NO-USER-MODIFICATION']!=None
     self.usage = AttributeUsage.get(d['USAGE'][0],0)
-    assert type(self.names)==TupleType
-    assert self.desc is None or type(self.desc)==StringType
-    assert type(self.sup)==TupleType,'attribute sup has type %s' % (type(self.sup))
-    assert type(self.obsolete)==BooleanType and (self.obsolete==0 or self.obsolete==1)
-    assert type(self.single_value)==BooleanType and (self.single_value==0 or self.single_value==1)
-    assert type(self.no_user_mod)==BooleanType and (self.no_user_mod==0 or self.no_user_mod==1)
-    assert self.syntax is None or type(self.syntax)==StringType
-    assert self.syntax_len is None or type(self.syntax_len)==type(0L)
+    assert _check_if_iterable(self.names)
+    assert _check_if_string(self.desc)
+    assert _check_if_iterable(self.sup),'attribute sup has type %s' % (type(self.sup))
+    assert _check_if_boolean(self.obsolete)
+    assert _check_if_boolean(self.single_value)
+    assert _check_if_boolean(self.no_user_mod)
+    assert _check_if_string(self.syntax)
+    assert self.syntax_len is None or isinstance(self.syntax_len, six.integer_types)
     return
 
   def __str__(self):
@@ -350,10 +366,10 @@ class LDAPSyntax(SchemaElement):
     self.desc = d['DESC'][0]
     self.x_subst = d['X-SUBST'][0]
     self.not_human_readable = \
-      NOT_HUMAN_READABLE_LDAP_SYNTAXES.has_key(self.oid) or \
+      self.oid in NOT_HUMAN_READABLE_LDAP_SYNTAXES or \
       d['X-NOT-HUMAN-READABLE'][0]=='TRUE'
     self.x_binary_transfer_required = d['X-BINARY-TRANSFER-REQUIRED'][0]=='TRUE'
-    assert self.desc is None or type(self.desc)==StringType
+    assert _check_if_string(self.desc)
     return
 
   def __str__(self):
@@ -400,10 +416,10 @@ class MatchingRule(SchemaElement):
     self.desc = d['DESC'][0]
     self.obsolete = d['OBSOLETE']!=None
     self.syntax = d['SYNTAX'][0]
-    assert type(self.names)==TupleType
-    assert self.desc is None or type(self.desc)==StringType
-    assert type(self.obsolete)==BooleanType and (self.obsolete==0 or self.obsolete==1)
-    assert self.syntax is None or type(self.syntax)==StringType
+    assert _check_if_iterable(self.names)
+    assert _check_if_string(self.desc)
+    assert _check_if_boolean(self.obsolete)
+    assert _check_if_string(self.syntax)
     return
 
   def __str__(self):
@@ -450,10 +466,10 @@ class MatchingRuleUse(SchemaElement):
     self.desc = d['DESC'][0]
     self.obsolete = d['OBSOLETE']!=None
     self.applies = d['APPLIES']
-    assert type(self.names)==TupleType
-    assert self.desc is None or type(self.desc)==StringType
-    assert type(self.obsolete)==BooleanType and (self.obsolete==0 or self.obsolete==1)
-    assert type(self.applies)==TupleType
+    assert _check_if_iterable(self.names)
+    assert _check_if_string(self.desc)
+    assert _check_if_boolean(self.obsolete)
+    assert _check_if_iterable(self.applies)
     return
 
   def __str__(self):
@@ -517,13 +533,13 @@ class DITContentRule(SchemaElement):
     self.must = d['MUST']
     self.may = d['MAY']
     self.nots = d['NOT']
-    assert type(self.names)==TupleType
-    assert self.desc is None or type(self.desc)==StringType
-    assert type(self.obsolete)==BooleanType and (self.obsolete==0 or self.obsolete==1)
-    assert type(self.aux)==TupleType
-    assert type(self.must)==TupleType
-    assert type(self.may)==TupleType
-    assert type(self.nots)==TupleType
+    assert _check_if_iterable(self.names)
+    assert _check_if_string(self.desc)
+    assert _check_if_boolean(self.obsolete)
+    assert _check_if_iterable(self.names)
+    assert _check_if_iterable(self.must)
+    assert _check_if_iterable(self.may)
+    assert _check_if_iterable(self.nots)
     return
 
   def __str__(self):
@@ -584,11 +600,11 @@ class DITStructureRule(SchemaElement):
     self.obsolete = d['OBSOLETE']!=None
     self.form = d['FORM'][0]
     self.sup = d['SUP']
-    assert type(self.names)==TupleType
-    assert self.desc is None or type(self.desc)==StringType
-    assert type(self.obsolete)==BooleanType and (self.obsolete==0 or self.obsolete==1)
-    assert type(self.form)==StringType
-    assert type(self.sup)==TupleType
+    assert _check_if_iterable(self.names)
+    assert _check_if_string(self.desc)
+    assert _check_if_boolean(self.obsolete)
+    assert _check_if_string(self.form, False)
+    assert _check_if_iterable(self.sup)
     return
 
   def __str__(self):
@@ -648,12 +664,12 @@ class NameForm(SchemaElement):
     self.oc = d['OC'][0]
     self.must = d['MUST']
     self.may = d['MAY']
-    assert type(self.names)==TupleType
-    assert self.desc is None or type(self.desc)==StringType
-    assert type(self.obsolete)==BooleanType and (self.obsolete==0 or self.obsolete==1)
-    assert type(self.oc)==StringType
-    assert type(self.must)==TupleType
-    assert type(self.may)==TupleType
+    assert _check_if_iterable(self.names)
+    assert _check_if_string(self.desc)
+    assert _check_if_boolean(self.obsolete)
+    assert _check_if_string(self.oc, False)
+    assert _check_if_iterable(self.must)
+    assert _check_if_iterable(self.may)
     return
 
   def __str__(self):
@@ -667,7 +683,7 @@ class NameForm(SchemaElement):
     return '( %s )' % ''.join(result)
 
 
-class Entry(UserDict.UserDict):
+class Entry(UserDict):
   """
   Schema-aware implementation of an LDAP entry class.
 
@@ -701,11 +717,16 @@ class Entry(UserDict.UserDict):
       return t
 
   def update(self,dict):
-    for key in dict.keys():
+    for key in list(dict.keys()):
       self[key] = dict[key]
 
   def __contains__(self,key):
-    return self.has_key(key)
+    try:
+      _ = self[key]
+      return True
+    except KeyError:
+      pass
+    return False
 
   def __getitem__(self,nameoroid):
     return self.data[self._at2key(nameoroid)]
@@ -723,7 +744,7 @@ class Entry(UserDict.UserDict):
 
   def has_key(self,nameoroid):
     k = self._at2key(nameoroid)
-    return self.data.has_key(k)
+    return k in self.data
 
   def get(self,nameoroid,failobj):
     try:
@@ -732,12 +753,12 @@ class Entry(UserDict.UserDict):
       return failobj
 
   def keys(self):
-    return self._keytuple2attrtype.values()
+    return list(self._keytuple2attrtype.values())
 
   def items(self):
     return [
       (k,self[k])
-      for k in self.keys()
+      for k in list(self.keys())
     ]
 
   def attribute_types(

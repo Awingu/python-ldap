@@ -34,7 +34,7 @@ CHANGE_TYPES_INT = {
   'modify':4,
   'modDN':8,
 }
-CHANGE_TYPES_STR = dict([(v,k) for k,v in CHANGE_TYPES_INT.items()])
+CHANGE_TYPES_STR = dict([(v,k) for k,v in list(CHANGE_TYPES_INT.items())])
 
 
 class PersistentSearchControl(RequestControl):
@@ -63,7 +63,7 @@ class PersistentSearchControl(RequestControl):
   def __init__(self,criticality=True,changeTypes=None,changesOnly=False,returnECs=True):
     self.criticality,self.changesOnly,self.returnECs = \
       criticality,changesOnly,returnECs
-    self.changeTypes = changeTypes or CHANGE_TYPES_INT.values()
+    self.changeTypes = changeTypes or list(CHANGE_TYPES_INT.values())
 
   def encodeControlValue(self):
     if not type(self.changeTypes)==type(0):

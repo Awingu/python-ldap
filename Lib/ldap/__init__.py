@@ -23,7 +23,7 @@ import _ldap
 from _ldap import *
 
 OPT_NAMES_DICT = {}
-for k,v in vars(_ldap).items():
+for k,v in list(vars(_ldap).items()):
   if k.startswith('OPT_'):
     OPT_NAMES_DICT[v]=k
 
@@ -38,7 +38,7 @@ class DummyLock:
 
 try:
   # Check if Python installation was build with thread support
-  import thread
+  from six.moves import _thread
 except ImportError:
   LDAPLockBaseClass = DummyLock
 else:
@@ -82,9 +82,9 @@ class LDAPLock:
 # Create module-wide lock for serializing all calls into underlying LDAP lib
 _ldap_module_lock = LDAPLock(desc='Module wide')
 
-from functions import open,initialize,init,get_option,set_option,escape_str
+from .functions import open,initialize,init,get_option,set_option,escape_str
 
-from ldapobject import NO_UNIQUE_ENTRY
+from .ldapobject import NO_UNIQUE_ENTRY
 
 from ldap.dn import explode_dn,explode_rdn,str2dn,dn2str
 del str2dn

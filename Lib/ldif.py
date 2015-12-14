@@ -23,19 +23,19 @@ __all__ = [
   'LDIFCopy',
 ]
 
-import urlparse,urllib,base64,re,types
+import base64,re,types
+import six
+import sys
 
-try:
-  from cStringIO import StringIO
-except ImportError:
-  from StringIO import StringIO
+from six.moves import cStringIO
+
 
 attrtype_pattern = r'[\w;.-]+(;[\w_-]+)*'
 attrvalue_pattern = r'(([^,]|\\,)+|".*?")'
 attrtypeandvalue_pattern = attrtype_pattern + r'[ ]*=[ ]*' + attrvalue_pattern
 rdn_pattern   = attrtypeandvalue_pattern + r'([ ]*\+[ ]*' + attrtypeandvalue_pattern + r')*[ ]*'
 dn_pattern   = rdn_pattern + r'([ ]*,[ ]*' + rdn_pattern + r')*[ ]*'
-dn_regex   = re.compile('^%s$' % dn_pattern)
+dn_regex   = re.compile(six.b('^%s$' % dn_pattern))
 
 ldif_pattern = '^((dn(:|::) %(dn_pattern)s)|(%(attrtype_pattern)s(:|::) .*)$)+' % vars()
 
@@ -55,17 +55,23 @@ for c in CHANGE_TYPES:
   valid_changetype_dict[c]=None
 
 
+def _string_to_byte(s):
+  if isinstance(s, six.text_type):
+    s = s.encode('utf-8')
+  return s
+
+
 def is_dn(s):
   """
   returns 1 if s is a LDAP DN
   """
-  if s=='':
+  if not s:
     return 1
   rm = dn_regex.match(s)
   return rm!=None and rm.group(0)==s
 
 
-SAFE_STRING_PATTERN = '(^(\000|\n|\r| |:|<)|[\000\n\r\200-\377]+|[ ]+$)'
+SAFE_STRING_PATTERN = six.b('(^(\000|\n|\r| |:|<)|[\000\n\r\200-\377]+|[ ]+$)')
 safe_string_re = re.compile(SAFE_STRING_PATTERN)
 
 def list_dict(l):
@@ -126,7 +132,7 @@ class LDIFWriter:
     returns 1 if attr_value has to be base-64 encoded because
     of special chars or because attr_type is in self._base64_attrs
     """
-    return self._base64_attrs.has_key(attr_type.lower()) or \
+    return attr_type.lower() in self._base64_attrs or \
            not safe_string_re.search(attr_value) is None
 
   def _unparseAttrTypeandValue(self,attr_type,attr_value):
@@ -138,11 +144,18 @@ class LDIFWriter:
     attr_value
           attribute value
     """
+    # convert attr_value to bytes
+    attr_value = _string_to_byte(attr_value)
     if self._needs_base64_encoding(attr_type,attr_value):
       # Encode with base64
-      self._unfold_lines(':: '.join([attr_type,base64.encodestring(attr_value).replace('\n','')]))
+      b64_str = None
+      if sys.version_info >= (3, 1):
+        b64_str = base64.encodebytes(attr_value)
+      else:
+        b64_str = base64.encodestring(attr_value)
+      self._unfold_lines(':: '.join([attr_type,b64_str.decode('utf-8').replace('\n','')]))
     else:
-      self._unfold_lines(': '.join([attr_type,attr_value]))
+      self._unfold_lines(': '.join([attr_type,attr_value.decode('utf-8')]))
     return # _unparseAttrTypeandValue()
 
   def _unparseEntryRecord(self,entry):
@@ -150,7 +163,7 @@ class LDIFWriter:
     entry
         dictionary holding an entry
     """
-    attr_types = entry.keys()[:]
+    attr_types = list(entry.keys())[:]
     attr_types.sort()
     for attr_type in attr_types:
       for attr_value in entry[attr_type]:
@@ -194,9 +207,9 @@ class LDIFWriter:
     # Start with line containing the distinguished name
     self._unparseAttrTypeandValue('dn',dn)
     # Dispatch to record type specific writers
-    if isinstance(record,types.DictType):
+    if isinstance(record,dict):
       self._unparseEntryRecord(record)
-    elif isinstance(record,types.ListType):
+    elif isinstance(record,list):
       self._unparseChangeRecord(record)
     else:
       raise ValueError('Argument record must be dictionary or list instead of %s' % (repr(record)))
@@ -327,17 +340,22 @@ class LDIFParser:
       attr_value = unfolded_line[colon_pos+2:].lstrip()
     elif value_spec=='::':
       # attribute value needs base64-decoding
-      attr_value = base64.decodestring(unfolded_line[colon_pos+2:])
+      if sys.version_info >= (3, 1):
+        attr_value = base64.decodebytes(six.b(unfolded_line[colon_pos+2:]))
+      else:
+        attr_value = base64.decodestring(six.b(unfolded_line[colon_pos+2:]))
     elif value_spec==':<':
       # fetch attribute value from URL
       url = unfolded_line[colon_pos+2:].strip()
       attr_value = None
       if self._process_url_schemes:
-        u = urlparse.urlparse(url)
-        if self._process_url_schemes.has_key(u[0]):
-          attr_value = urllib.urlopen(url).read()
+        u = six.moves.urllib.parse.urlparse(url)
+        if u[0] in self._process_url_schemes:
+          attr_value = six.moves.urllib.request.urlopen(url).read()
     else:
       attr_value = unfolded_line[colon_pos+1:]
+    # convert attr_value to bytes
+    attr_value = _string_to_byte(attr_value)
     return attr_type,attr_value
 
   def parse_entry_records(self):
@@ -361,7 +379,9 @@ class LDIFParser:
         raise ValueError('Line %d: First line of record does not start with "dn:": %s' % (self.line_counter,repr(k)))
       if not is_dn(v):
         raise ValueError('Line %d: Not a valid string-representation for dn: %s.' % (self.line_counter,repr(v)))
-      dn = v
+      # The dn value is expected to be a string, unlike the other attribute
+      # values, therefore encode the byte string to a utf-8 string.
+      dn = v.decode('utf-8')
       entry = {}
       # Consume second line of record
       k,v = self._next_key_and_value()
@@ -576,7 +596,7 @@ if __name__ == '__main__':
     parser_method()
     end_time = time.time()
     input_file.close()
-    print '***Time needed:',end_time-start_time,'seconds'
-    print '***Records read:',ldif_parser.records_read
-    print '***Lines read:',ldif_parser.line_counter
-    print '***Bytes read:',ldif_parser.byte_counter,'of',input_file_size
+    print('***Time needed:',end_time-start_time,'seconds')
+    print('***Records read:',ldif_parser.records_read)
+    print('***Lines read:',ldif_parser.line_counter)
+    print('***Bytes read:',ldif_parser.byte_counter,'of',input_file_size)

@@ -13,6 +13,7 @@ Tested with Python 2.0+.
 __version__ = '2.4.22'
 
 import string,base64
+import six
 
 
 special_entities = (
@@ -49,16 +50,19 @@ class DSMLWriter:
     self,f,base64_attrs=[],dsml_comment='',indent='    '
   ):
     self._output_file = f
-    self._base64_attrs = {}.fromkeys(map(string.lower,base64_attrs))
+    self._base64_attrs = {}.fromkeys([x.lower() for x in base64_attrs])
     self._dsml_comment = dsml_comment
     self._indent = indent
 
   def _needs_base64_encoding(self,attr_type,attr_value):
     if self._base64_attrs:
-      return self._base64_attrs.has_key(string.lower(attr_type))
+      return attr_type.lower() in self._base64_attrs
     else:
       try:
-        unicode(attr_value,'utf-8')
+        if six.PY2:
+          unicode(attr_value,'utf-8')
+        else:
+          str(attr_value,'utf-8')
       except UnicodeError:
         return 1
       else:
@@ -112,7 +116,7 @@ class DSMLWriter:
       self._output_file.write('%s<dsml:oc-value>%s</dsml:oc-value>\n' % (self._indent*4,oc))
     self._output_file.write('%s</dsml:objectclass>\n' % (self._indent*3))
 
-    attr_types = entry.keys()[:]
+    attr_types = list(entry.keys())[:]
     try:
       attr_types.remove('objectclass')
       attr_types.remove('objectClass')
@@ -195,7 +199,7 @@ else:
         self._oc_value = ''
       # Unhandled tags
       else:
-        raise ValueError,'Unknown tag %s' % (raw_name)
+        raise ValueError('Unknown tag %s' % (raw_name))
 
     def endElement(self,raw_name):
       assert raw_name.startswith('dsml:'),'Illegal name'
@@ -230,12 +234,12 @@ else:
         del self._oc_value
       # Unhandled tags
       else:
-        raise ValueError,'Unknown tag %s' % (raw_name)
+        raise ValueError('Unknown tag %s' % (raw_name))
 
     def characters(self,ch):
-      if self.__dict__.has_key('_oc_value'):
+      if '_oc_value' in self.__dict__:
         self._oc_value = self._oc_value + ch
-      elif self.__dict__.has_key('_attr_value'):
+      elif '_attr_value' in self.__dict__:
         self._attr_value = self._attr_value + ch
       else:
         pass
@@ -273,7 +277,7 @@ else:
     ):
       self._input_file = input_file
       self._max_entries = max_entries
-      self._ignored_attr_types = {}.fromkeys(map(string.lower,(ignored_attr_types or [])))
+      self._ignored_attr_types = {}.fromkeys([x.lower() for x in (ignored_attr_types or [])])
       self._current_record = None,None
       self.records_read = 0
       self._parser = xml.sax.make_parser()

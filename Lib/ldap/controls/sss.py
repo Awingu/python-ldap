@@ -14,6 +14,7 @@ __all__ = [
 ]
 
 
+import six
 import ldap
 from ldap.ldapobject import LDAPObject
 from ldap.controls import (RequestControl, ResponseControl,
@@ -59,7 +60,7 @@ class SSSRequestControl(RequestControl):
     ):
         RequestControl.__init__(self,self.controlType,criticality)
         self.ordering_rules = ordering_rules
-        if isinstance(ordering_rules, basestring):
+        if isinstance(ordering_rules, six.string_types):
             ordering_rules = [ordering_rules]
         for rule in ordering_rules:
             rule = rule.split(':')

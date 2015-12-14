@@ -10,7 +10,6 @@ import ldap.cidict,ldap.schema
 
 from ldap.schema.models import *
 
-from UserDict import UserDict
 
 SCHEMA_CLASS_MAPPING = ldap.cidict.cidict()
 SCHEMA_ATTR_MAPPING = {}
@@ -21,7 +20,7 @@ for _name in dir():
     SCHEMA_CLASS_MAPPING[o.schema_attribute] = o
     SCHEMA_ATTR_MAPPING[o] = o.schema_attribute
 
-SCHEMA_ATTRS = SCHEMA_CLASS_MAPPING.keys()
+SCHEMA_ATTRS = list(SCHEMA_CLASS_MAPPING.keys())
 
 
 class SubschemaError(ValueError):
@@ -85,7 +84,7 @@ class SubSchema:
     self.sed = {}
     self.non_unique_oids = {}
     self.non_unique_names = {}
-    for c in SCHEMA_CLASS_MAPPING.values():
+    for c in list(SCHEMA_CLASS_MAPPING.values()):
       self.name2oid[c] = ldap.cidict.cidict()
       self.sed[c] = {}
       self.non_unique_names[c] = ldap.cidict.cidict()
@@ -96,7 +95,7 @@ class SubSchema:
     # Build the schema registry in dictionaries
     for attr_type in SCHEMA_ATTRS:
 
-      for attr_value in filter(None,e.get(attr_type,[])):
+      for attr_value in [_f for _f in e.get(attr_type,[]) if _f]:
 
         se_class = SCHEMA_CLASS_MAPPING[attr_type]
         se_instance = se_class(attr_value)
@@ -120,7 +119,7 @@ class SubSchema:
         self.sed[se_class][se_id] = se_instance
 
         if hasattr(se_instance,'names'):
-          for name in ldap.cidict.cidict({}.fromkeys(se_instance.names)).keys():
+          for name in list(ldap.cidict.cidict({}.fromkeys(se_instance.names)).keys()):
             if check_uniqueness and name in self.name2oid[se_class]:
               self.non_unique_names[se_class][se_id] = None
               raise NameNotUnique(attr_value)
@@ -128,7 +127,7 @@ class SubSchema:
               self.name2oid[se_class][name] = se_id
 
     # Turn dict into list maybe more handy for applications
-    self.non_unique_oids = self.non_unique_oids.keys()
+    self.non_unique_oids = list(self.non_unique_oids.keys())
 
     return # subSchema.__init__()
 
@@ -141,8 +140,8 @@ class SubSchema:
     entry = {}
     # Collect the schema elements and store them in
     # entry's attributes
-    for se_class in self.sed.keys():
-      for se in self.sed[se_class].values():
+    for se_class in list(self.sed.keys()):
+      for se in list(self.sed[se_class].values()):
         se_str = str(se)
         try:
           entry[SCHEMA_ATTR_MAPPING[se_class]].append(se_str)
@@ -158,7 +157,7 @@ class SubSchema:
     avail_se = self.sed[schema_element_class]
     if schema_element_filters:
       result = []
-      for se_key in avail_se.keys():
+      for se_key in list(avail_se.keys()):
         se = avail_se[se_key]
         for fk,fv in schema_element_filters:
           try:
@@ -167,7 +166,7 @@ class SubSchema:
           except AttributeError:
             pass
     else:
-      result = avail_se.keys()
+      result = list(avail_se.keys())
     return result
 
 
@@ -298,11 +297,11 @@ class SubSchema:
       if oc_se and oc_se.kind==0:
         struct_ocs[oc_se.oid] = None
     result = None
-    struct_oc_list = struct_ocs.keys()
+    struct_oc_list = list(struct_ocs.keys())
     while struct_oc_list:
       oid = struct_oc_list.pop()
       for child_oid in oc_tree[oid]:
-        if struct_ocs.has_key(self.getoid(ObjectClass,child_oid)):
+        if self.getoid(ObjectClass,child_oid) in struct_ocs:
           break
       else:
         result = oid
@@ -361,7 +360,7 @@ class SubSchema:
     r_must,r_may = ldap.cidict.cidict(),ldap.cidict.cidict()
     if '1.3.6.1.4.1.1466.101.120.111' in object_class_oids:
       # Object class 'extensibleObject' MAY carry every attribute type
-      for at_obj in self.sed[AttributeType].values():
+      for at_obj in list(self.sed[AttributeType].values()):
         r_may[at_obj.oid] = at_obj
 
     # Loop over OIDs of all given object classes
@@ -369,7 +368,7 @@ class SubSchema:
       object_class_oid = object_class_oids.pop(0)
       # Check whether the objectClass with this OID
       # has already been processed
-      if oid_cache.has_key(object_class_oid):
+      if object_class_oid in oid_cache:
         continue
       # Cache this OID as already being processed
       oid_cache[object_class_oid] = None
@@ -421,20 +420,20 @@ class SubSchema:
 
     # Remove all mandantory attribute types from
     # optional attribute type list
-    for a in r_may.keys():
-      if r_must.has_key(a):
+    for a in list(r_may.keys()):
+      if a in r_must:
         del r_may[a]
 
     # Apply attr_type_filter to results
     if attr_type_filter:
       for l in [r_must,r_may]:
-        for a in l.keys():
+        for a in list(l.keys()):
           for afk,afv in attr_type_filter:
             try:
               schema_attr_type = self.sed[AttributeType][a]
             except KeyError:
               if raise_keyerror:
-                raise KeyError,'No attribute type found in sub schema by name %s' % (a)
+                raise KeyError('No attribute type found in sub schema by name %s' % (a))
               # If there's no schema element for this attribute type
               # but still KeyError is to be ignored we filter it away
               del l[a]
@@ -476,15 +475,15 @@ def urlfetch(uri,trace_level=0):
     l.unbind_s()
     del l
   else:
-    import urllib,ldif
-    ldif_file = urllib.urlopen(uri)
+    import urllib.request,ldif
+    ldif_file = urllib.request.urlopen(uri)
     ldif_parser = ldif.LDIFRecordList(ldif_file,max_entries=1)
     ldif_parser.parse()
     subschemasubentry_dn,s_temp = ldif_parser.all_records[0]
   # Work-around for mixed-cased attribute names
   subschemasubentry_entry = ldap.cidict.cidict()
   s_temp = s_temp or {}
-  for at,av in s_temp.items():
+  for at,av in list(s_temp.items()):
     if at in SCHEMA_CLASS_MAPPING:
       try:
         subschemasubentry_entry[at].extend(av)

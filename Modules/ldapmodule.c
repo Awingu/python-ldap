@@ -11,27 +11,48 @@
 
 #include "LDAPObject.h"
 
-DL_EXPORT(void) init_ldap(void);
+#define LDAP_NAME "_ldap"
 
-/* dummy module methods */
-
-static PyMethodDef methods[]  = {
-	{ NULL, NULL }
+#ifdef IS_PY3K
+static struct PyModuleDef moduledef = {
+    PyModuleDef_HEAD_INIT,
+    LDAP_NAME,           /* m_name */
+    NULL,                /* m_doc */
+    -1,                  /* m_size */
+    NULL,                /* m_methods */
+    NULL,                /* m_reload */
+    NULL,                /* m_traverse */
+    NULL,                /* m_clear */
+    NULL,                /* m_free */
 };
+#define init_ldap PyInit__ldap
+#define PYMOD_INIT_RETURN(m) return m
+#else
+#ifndef PyMODINIT_FUNC
+#define PyMODINIT_FUNC DL_EXPORT(void)
+#endif
+#define PYMOD_INIT_RETURN(m) return
+#endif
 
 /* module initialisation */
 
-DL_EXPORT(void)
-init_ldap()
+PyMODINIT_FUNC
+init_ldap(void)
 {
 	PyObject *m, *d;
 
-#if defined(MS_WINDOWS) || defined(__CYGWIN__)
-	LDAP_Type.ob_type = &PyType_Type;
-#endif
+    m = NULL;
+    d = NULL;
 
-	/* Create the module and add the functions */
-	m = Py_InitModule("_ldap", methods);
+    if (PyType_Ready(&LDAP_Type) < 0)
+        PYMOD_INIT_RETURN(m);
+
+    /* Create the module and add the functions */
+#ifdef IS_PY3K
+    m = PyModule_Create(&moduledef);
+#else
+    m = Py_InitModule(LDAP_NAME, NULL);
+#endif
 
 	/* Add some symbolic constants to the module */
 	d = PyModule_GetDict(m);
@@ -44,6 +65,9 @@ init_ldap()
 	LDAPinit_control(d);
 
 	/* Check for errors */
-	if (PyErr_Occurred())
+	if (PyErr_Occurred()) {
 		Py_FatalError("can't initialize module _ldap");
+        PYMOD_INIT_RETURN(m);
+    }
+    PYMOD_INIT_RETURN(m);
 }
