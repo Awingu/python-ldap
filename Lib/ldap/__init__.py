@@ -8,7 +8,7 @@ $Id: __init__.py,v 1.99 2015/09/30 17:15:53 stroeder Exp $
 
 # This is also the overall release version number
 
-__version__ = '2.4.22'
+__version__ = '2.4.22awingu1'
 
 import sys
 
